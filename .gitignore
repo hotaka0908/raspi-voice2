@@ -1,0 +1,28 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Audio files
+*.wav
+*.mp3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Cloned repo
+voice-ai-agent/
+token.json
+
+# Firebase config (contains API key)
+voice-messenger-web/firebase-config.js
+firebase_voice_config.py
