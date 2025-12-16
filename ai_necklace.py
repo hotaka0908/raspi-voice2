@@ -133,81 +133,144 @@ CONFIG = {
 音声で読み上げられるため、1-2文程度の短い応答を心がけてください。
 日本語で回答してください。
 
-あなたはGmailの操作も可能です。以下のツールを使用できます:
-
-## 利用可能なツール
-
-1. gmail_list - メール一覧取得
-   - query: 検索クエリ（例: "is:unread", "from:xxx@gmail.com"）
-   - max_results: 取得件数（デフォルト5）
-
-2. gmail_read - メール本文読み取り
-   - message_id: メールID
-
-3. gmail_send - 新規メール送信
-   - to: 宛先メールアドレス
-   - subject: 件名
-   - body: 本文
-
-4. gmail_reply - メール返信（写真添付も可能）
-   - message_id: 返信するメールの番号（1, 2, 3など。gmail_listで表示された番号を使用）
-   - body: 返信本文
-   - attach_photo: 写真を撮影して添付するか（true/false、デフォルト: false）
-
-ツールを使う場合は、以下のJSON形式で応答してください:
-{"tool": "ツール名", "params": {パラメータ}}
-
-ツールを使わない通常の応答の場合は、普通にテキストで回答してください。
-
-重要なルール:
-- message_idには必ず数字（1, 2, 3など）を使ってください。「先ほどのメール」などの文字列は使わないでください。
-- 写真付きで返信する場合は必ず attach_photo: true を含めてください。
-- メールに返信する前に、gmail_listでメール一覧を取得していない場合は、まずgmail_listを実行してください。
-
-ユーザーが「メールを確認」「メールを読んで」と言ったら、gmail_listで未読メールを確認してください。
-ユーザーが特定のメールの詳細を聞いたら、gmail_readで本文を取得してください。
-ユーザーが「メールを送って」と言ったら、宛先・件名・本文を確認してgmail_sendを使ってください。
-ユーザーが「さっきのメールに返信」「1番目のメールに返信」と言ったら、message_id: 1 を使ってgmail_replyを実行してください。
-ユーザーが「写真付きで返信」と言ったら、gmail_replyにattach_photo: trueを必ず含めてください。
-
-## アラーム機能
-
-5. alarm_set - アラーム設定
-   - time: 時刻（HH:MM形式、例: "07:00", "14:30"）
-   - label: ラベル（オプション、例: "起床"）
-   - message: 読み上げメッセージ（オプション）
-
-6. alarm_list - アラーム一覧取得
-
-7. alarm_delete - アラーム削除
-   - alarm_id: アラームID（番号）
-
-## カメラ機能
-
-8. camera_capture - カメラで撮影して画像を説明
-   - prompt: 画像に対する質問（オプション、例: "これは何？", "何が見える？"）
-
-9. gmail_send_photo - 写真を撮影してメールで送信
-   - to: 宛先メールアドレス（オプション）
-   - subject: 件名（オプション）
-   - body: 本文（オプション）
-
-## 音声メッセージ機能
-
-10. voice_record_send - スマホに音声メッセージを録音して送信
-
-## 翻訳モード
-
-11. translation_mode_on - 翻訳モードを開始
-    - source_lang: 元の言語（デフォルト: "ja"）
-    - target_lang: 翻訳先言語（デフォルト: "en"）
-
-12. translation_mode_off - 翻訳モードを終了
-
-ユーザーが「通訳モードにして」「翻訳モード開始」と言ったら、translation_mode_onを呼び出してください。
-ユーザーが「通訳モード終了」「翻訳モードオフ」と言ったら、translation_mode_offを呼び出してください。
+利用可能なツールがある場合は適切に使用してください。
+ユーザーが「メールを確認」と言ったらgmail_listを使ってください。
+ユーザーが「通訳モードにして」と言ったらtranslation_mode_onを使ってください。
+ユーザーが「通訳モード終了」と言ったらtranslation_mode_offを使ってください。
+ユーザーが「写真を撮って」と言ったらcamera_captureを使ってください。
+ユーザーが「アラームをセット」と言ったらalarm_setを使ってください。
+ユーザーが「スマホにメッセージを送って」と言ったらvoice_record_sendを使ってください。
 """,
 }
+
+# ==================== Function Calling ツール定義 ====================
+from google.genai import types as genai_types
+
+TOOL_DECLARATIONS = [
+    genai_types.FunctionDeclaration(
+        name="gmail_list",
+        description="メール一覧を取得する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "query": {"type": "STRING", "description": "検索クエリ（例: is:unread）"},
+                "max_results": {"type": "INTEGER", "description": "取得件数"}
+            }
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="gmail_read",
+        description="メール本文を読み取る",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "message_id": {"type": "INTEGER", "description": "メールID（番号）"}
+            },
+            "required": ["message_id"]
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="gmail_send",
+        description="新規メールを送信する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "to": {"type": "STRING", "description": "宛先メールアドレス"},
+                "subject": {"type": "STRING", "description": "件名"},
+                "body": {"type": "STRING", "description": "本文"}
+            },
+            "required": ["to", "subject", "body"]
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="gmail_reply",
+        description="メールに返信する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "message_id": {"type": "INTEGER", "description": "返信するメールの番号"},
+                "body": {"type": "STRING", "description": "返信本文"},
+                "attach_photo": {"type": "BOOLEAN", "description": "写真を添付するか"}
+            },
+            "required": ["message_id", "body"]
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="alarm_set",
+        description="アラームを設定する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "time": {"type": "STRING", "description": "時刻（HH:MM形式）"},
+                "label": {"type": "STRING", "description": "ラベル"},
+                "message": {"type": "STRING", "description": "読み上げメッセージ"}
+            },
+            "required": ["time"]
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="alarm_list",
+        description="アラーム一覧を取得する",
+        parameters={"type": "OBJECT", "properties": {}}
+    ),
+    genai_types.FunctionDeclaration(
+        name="alarm_delete",
+        description="アラームを削除する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "alarm_id": {"type": "INTEGER", "description": "アラームID"}
+            },
+            "required": ["alarm_id"]
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="camera_capture",
+        description="カメラで撮影して画像を説明する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "prompt": {"type": "STRING", "description": "画像に対する質問"}
+            }
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="gmail_send_photo",
+        description="写真を撮影してメールで送信する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "to": {"type": "STRING", "description": "宛先"},
+                "subject": {"type": "STRING", "description": "件名"},
+                "body": {"type": "STRING", "description": "本文"}
+            }
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="voice_record_send",
+        description="スマホに音声メッセージを録音して送信する",
+        parameters={"type": "OBJECT", "properties": {}}
+    ),
+    genai_types.FunctionDeclaration(
+        name="translation_mode_on",
+        description="翻訳モードを開始する",
+        parameters={
+            "type": "OBJECT",
+            "properties": {
+                "source_lang": {"type": "STRING", "description": "元の言語（デフォルト: ja）"},
+                "target_lang": {"type": "STRING", "description": "翻訳先言語（デフォルト: en）"}
+            }
+        }
+    ),
+    genai_types.FunctionDeclaration(
+        name="translation_mode_off",
+        description="翻訳モードを終了する",
+        parameters={"type": "OBJECT", "properties": {}}
+    ),
+]
+
+TOOLS = [genai_types.Tool(function_declarations=TOOL_DECLARATIONS)]
+
 
 # リトライ設定
 MAX_RETRIES = 3
@@ -923,12 +986,29 @@ def translation_mode_off():
     return "翻訳モードを終了しました。通常モードに戻ります。"
 
 
+def detect_language(text):
+    """テキストの言語を判定（簡易版）"""
+    # 日本語文字が含まれているかチェック
+    japanese_chars = sum(1 for c in text if '぀' <= c <= 'ゟ' or '゠' <= c <= 'ヿ' or '一' <= c <= '鿿')
+    if japanese_chars > len(text) * 0.1:
+        return "ja"
+    return "en"
+
+
+@retry_on_error
 def translate_text(text):
-    """テキストを翻訳"""
+    """テキストを翻訳（翻訳結果と出力言語のタプルを返す）"""
     global gemini_client
 
     source_lang = CONFIG["source_language"]
     target_lang = CONFIG["target_language"]
+    
+    # 入力言語を判定して出力言語を決定
+    detected = detect_language(text)
+    if detected == source_lang:
+        output_lang = target_lang
+    else:
+        output_lang = source_lang
 
     prompt = f"""以下のテキストを翻訳してください。
 
@@ -944,9 +1024,10 @@ def translate_text(text):
             model=CONFIG["gemini_model"],
             contents=prompt
         )
-        return response.text.strip()
+        translated = response.text.strip()
+        return (translated, output_lang)
     except Exception as e:
-        return f"翻訳エラー: {str(e)}"
+        return (f"翻訳エラー: {str(e)}", "ja")
 
 
 # ==================== ツール実行 ====================
@@ -1219,15 +1300,15 @@ def transcribe_audio(audio_data):
 
 @retry_on_error
 def get_ai_response(text):
-    """AIからの応答を取得（ツール呼び出し対応）"""
+    """AIからの応答を取得（Gemini Function Calling対応）"""
     global gemini_client, conversation_history
 
     print(f"AI処理中... (入力: {text})")
 
     # 翻訳モードの場合
     if CONFIG["translation_mode"]:
-        translated = translate_text(text)
-        return translated
+        translated, output_lang = translate_text(text)
+        return (translated, output_lang)
 
     conversation_history.append({"role": "user", "content": text})
 
@@ -1244,115 +1325,109 @@ def get_ai_response(text):
         ))
 
     try:
+        # Function Callingを有効にしてリクエスト
         response = gemini_client.models.generate_content(
             model=CONFIG["gemini_model"],
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=CONFIG["system_prompt"],
-                max_output_tokens=500
+                max_output_tokens=500,
+                tools=TOOLS
             )
         )
 
+        # Function Callがあるかチェック
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    func_call = part.function_call
+                    tool_name = func_call.name
+                    tool_params = dict(func_call.args) if func_call.args else {}
+                    
+                    print(f"Function Call: {tool_name}({tool_params})")
+                    
+                    # ツールを実行
+                    tool_call = {"tool": tool_name, "params": tool_params}
+                    tool_result = execute_tool(tool_call)
+                    print(f"ツール結果: {tool_result}")
+
+                    if tool_result == "VOICE_RECORD_SEND":
+                        return "VOICE_RECORD_SEND"
+
+                    # ツール結果をfunction_responseとして返す
+                    function_response_content = types.Content(
+                        role="user",
+                        parts=[types.Part.from_function_response(
+                            name=tool_name,
+                            response={"result": str(tool_result)}
+                        )]
+                    )
+                    
+                    # 元のcontentsにfunction_callとresponseを追加
+                    contents.append(types.Content(
+                        role="model",
+                        parts=[part]
+                    ))
+                    contents.append(function_response_content)
+
+                    # 要約を取得
+                    summary_response = gemini_client.models.generate_content(
+                        model=CONFIG["gemini_model"],
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            system_instruction="ツールの実行結果を音声で読み上げるために、簡潔に日本語で要約してください。",
+                            max_output_tokens=300
+                        )
+                    )
+
+                    final_response = summary_response.text
+                    conversation_history.append({"role": "assistant", "content": final_response})
+                    return final_response
+
+        # 通常のテキスト応答
         ai_response = response.text
         print(f"Gemini応答: {ai_response}")
-
-        # ツール呼び出しかチェック
-        try:
-            json_match = re.search(r'\{"tool":\s*"[^"]+",\s*"params":\s*\{[^{}]*\}\}', ai_response)
-            if not json_match:
-                json_match = re.search(r'\{"tool":\s*"[^"]+",\s*"params":\s*\{[^}]*\}\}', ai_response)
-            if not json_match:
-                json_match = re.search(r'\{[^{}]*"tool"[^{}]*\}', ai_response)
-
-            tool_call = None
-            if json_match:
-                json_str = json_match.group()
-                try:
-                    tool_call = json.loads(json_str)
-                except json.JSONDecodeError:
-                    pass
-
-            if not tool_call and '"tool"' in ai_response:
-                start_idx = ai_response.find('{"tool"')
-                if start_idx == -1:
-                    start_idx = ai_response.find('{ "tool"')
-                if start_idx != -1:
-                    depth = 0
-                    for i, c in enumerate(ai_response[start_idx:]):
-                        if c == '{':
-                            depth += 1
-                        elif c == '}':
-                            depth -= 1
-                            if depth == 0:
-                                json_str = ai_response[start_idx:start_idx + i + 1]
-                                try:
-                                    tool_call = json.loads(json_str)
-                                    break
-                                except json.JSONDecodeError:
-                                    continue
-
-            if tool_call and 'tool' in tool_call:
-                print(f"ツール呼び出し: {tool_call}")
-
-                tool_result = execute_tool(tool_call)
-                print(f"ツール結果: {tool_result}")
-
-                if tool_result == "VOICE_RECORD_SEND":
-                    return "VOICE_RECORD_SEND"
-
-                conversation_history.append({"role": "assistant", "content": ai_response})
-                conversation_history.append({"role": "user", "content": f"ツール実行結果:\n{tool_result}\n\nこの結果を音声で読み上げるために、簡潔に日本語で要約してください。"})
-
-                contents = []
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "model"
-                    contents.append(types.Content(
-                        role=role,
-                        parts=[types.Part.from_text(text=msg["content"])]
-                    ))
-
-                summary_response = gemini_client.models.generate_content(
-                    model=CONFIG["gemini_model"],
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=CONFIG["system_prompt"],
-                        max_output_tokens=300
-                    )
-                )
-
-                final_response = summary_response.text
-                conversation_history.append({"role": "assistant", "content": final_response})
-                return final_response
-
-        except json.JSONDecodeError:
-            pass
-
         conversation_history.append({"role": "assistant", "content": ai_response})
         return ai_response
 
     except Exception as e:
-        print(f"AI応答エラー: {e}")
+        error_str = str(e)
+        print(f"AI応答エラー: {error_str}")
+        # 503エラーの場合はリトライ
+        if "503" in error_str or "overloaded" in error_str.lower():
+            raise e
         return "申し訳ありません。エラーが発生しました。"
 
 
-def text_to_speech(text):
+
+
+def text_to_speech(text, lang="ja"):
     """テキストを音声に変換（Google Cloud TTS REST API）"""
     import requests
     import base64
     
     api_key = os.getenv('GOOGLE_TTS_API_KEY')
-    print(f"音声合成中... (テキスト: {text[:30]}...)")
+    print(f"音声合成中... (テキスト: {text[:30]}..., 言語: {lang})")
+
+    # 言語に応じた音声設定
+    voice_config = {
+        'ja': {'languageCode': 'ja-JP', 'name': 'ja-JP-Neural2-B', 'ssmlGender': 'FEMALE'},
+        'en': {'languageCode': 'en-US', 'name': 'en-US-Neural2-F', 'ssmlGender': 'FEMALE'},
+        'zh': {'languageCode': 'zh-CN', 'name': 'zh-CN-Neural2-A', 'ssmlGender': 'FEMALE'},
+        'ko': {'languageCode': 'ko-KR', 'name': 'ko-KR-Neural2-A', 'ssmlGender': 'FEMALE'},
+        'fr': {'languageCode': 'fr-FR', 'name': 'fr-FR-Neural2-A', 'ssmlGender': 'FEMALE'},
+        'de': {'languageCode': 'de-DE', 'name': 'de-DE-Neural2-A', 'ssmlGender': 'FEMALE'},
+        'es': {'languageCode': 'es-ES', 'name': 'es-ES-Neural2-A', 'ssmlGender': 'FEMALE'},
+    }
+    
+    voice = voice_config.get(lang, voice_config['ja'])
 
     try:
         url = f'https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}'
         
         payload = {
             'input': {'text': text},
-            'voice': {
-                'languageCode': 'ja-JP',
-                'name': 'ja-JP-Neural2-B',
-                'ssmlGender': 'FEMALE'
-            },
+            'voice': voice,
             'audioConfig': {
                 'audioEncoding': 'LINEAR16',
                 'sampleRateHertz': 24000
@@ -1463,13 +1538,18 @@ def process_voice():
         print(f"\n[あなた] {text}")
 
         response = get_ai_response(text)
-        print(f"[AI] {response}")
-
-        if response == "VOICE_RECORD_SEND":
-            record_and_send_voice_message()
-            return
-
-        speech_audio = text_to_speech(response)
+        
+        # 翻訳モードの場合はタプル(翻訳結果, 言語)が返る
+        if isinstance(response, tuple):
+            response_text, output_lang = response
+            print(f"[AI] {response_text} ({output_lang})")
+            speech_audio = text_to_speech(response_text, output_lang)
+        else:
+            print(f"[AI] {response}")
+            if response == "VOICE_RECORD_SEND":
+                record_and_send_voice_message()
+                return
+            speech_audio = text_to_speech(response)
         if speech_audio:
             play_audio(speech_audio)
         else:
