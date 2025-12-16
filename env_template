@@ -1,3 +1,7 @@
 # Google API Key (必須)
 # https://aistudio.google.com/apikey から取得
 GOOGLE_API_KEY=your-google-api-key-here
+
+# Google Cloud TTS API Key (必須)
+# https://console.cloud.google.com/apis/credentials から取得
+GOOGLE_TTS_API_KEY=your-google-tts-api-key-here

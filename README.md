@@ -6,12 +6,13 @@ Raspberry Pi 5で動作する音声AIアシスタント。Google Gemini APIを�
 
 - **音声認識**: Gemini 2.5 Flashで音声をテキストに変換
 - **AI応答**: Gemini 2.5 Flashでインテリジェントな応答を生成
-- **音声合成**: Gemini TTSで自然な音声を生成（24言語対応）
+- **音声合成**: Google Cloud TTSで高速・自然な音声を生成（日本語対応）
 - **画像認識**: カメラで撮影してGeminiで画像を解析
 - **翻訳機能**: 日本語↔英語などの双方向翻訳（70言語対応）
 - **Gmail連携**: メールの確認・送信・返信
 - **アラーム**: 音声でアラーム設定
 - **音声メッセージ**: スマホとの音声メッセージ送受信（Firebase連携）
+- **自動リトライ**: サーバー混雑時に自動で再試行
 
 ## 必要なもの
 
@@ -37,17 +38,31 @@ cd raspi-voice2
 ### 2. 依存関係をインストール
 
 ```bash
+python3 -m venv --system-site-packages venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
 ### 3. Google API キーを設定
 
+#### Gemini API キー（必須）
 1. [Google AI Studio](https://aistudio.google.com/apikey) でAPIキーを取得
-2. `.env` ファイルを作成:
+2. 課金を有効化（推奨）
+
+#### Google Cloud TTS API キー（必須）
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) でAPIキーを作成
+2. Text-to-Speech APIを有効化
+
+#### .env ファイルを作成
 
 ```bash
 cp env_template .env
-# .env を編集して GOOGLE_API_KEY を設定
+# .env を編集
+```
+
+```
+GOOGLE_API_KEY=your-gemini-api-key
+GOOGLE_TTS_API_KEY=your-cloud-tts-api-key
 ```
 
 ### 4. Gmail設定（オプション）
@@ -88,15 +103,11 @@ python ai_necklace.py
 ```python
 CONFIG = {
     "gemini_model": "gemini-2.5-flash",      # 使用するモデル
-    "tts_voice": "Aoede",                     # TTS音声
-    "sample_rate": 16000,                     # 入力サンプルレート
+    "sample_rate": 44100,                     # 入力サンプルレート
     "output_sample_rate": 24000,              # 出力サンプルレート
     "button_pin": 5,                          # GPIOピン番号
 }
 ```
-
-### 利用可能なTTS音声
-- Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
 
 ## systemdサービスとして実行
 
@@ -112,11 +123,10 @@ sudo systemctl start ai-necklace
 |-----|---------------------|----------------------|
 | 音声認識 | Whisper API | Gemini 2.5 Flash |
 | AI応答 | GPT-4o-mini | Gemini 2.5 Flash |
-| 音声合成 | OpenAI TTS | Gemini TTS |
+| 音声合成 | OpenAI TTS | Google Cloud TTS |
 | 画像認識 | GPT-4o Vision | Gemini 2.5 Flash |
 | 翻訳 | - | ネイティブ対応 |
-| 入力レート | 44.1kHz | 16kHz |
-| 出力レート | 44.1kHz | 24kHz |
+| リトライ | - | 503エラー時自動リトライ |
 
 ## ライセンス
 

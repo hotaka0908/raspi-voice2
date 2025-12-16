@@ -98,7 +98,7 @@ GMAIL_SCOPES = [
 # 設定
 CONFIG = {
     # オーディオ設定
-    "sample_rate": 16000,  # Gemini Native Audio入力は16kHz
+    "sample_rate": 44100,  # Gemini Native Audio入力は16kHz
     "output_sample_rate": 24000,  # Gemini Native Audio出力は24kHz
     "channels": 1,
     "chunk_size": 1024,
@@ -209,6 +209,33 @@ CONFIG = {
 """,
 }
 
+# リトライ設定
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
+def retry_on_error(func):
+    """503エラー時にリトライするデコレータ"""
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        last_error = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                error_str = str(e)
+                if '503' in error_str or 'overloaded' in error_str.lower():
+                    last_error = e
+                    if attempt < MAX_RETRIES - 1:
+                        print(f"サーバー混雑中... {attempt + 1}/{MAX_RETRIES} 回目リトライ")
+                        import time
+                        time.sleep(RETRY_DELAY * (attempt + 1))
+                    continue
+                raise e
+        raise last_error
+    return wrapper
+
+
 # グローバル変数
 running = True
 gemini_client = None
@@ -267,6 +294,11 @@ def on_voice_message_received(message):
     global firebase_messenger
 
     print(f"\n📱 スマホから音声メッセージ受信!")
+
+    # 通知音を再生
+    notification = generate_notification_sound()
+    if notification:
+        play_audio(notification)
 
     try:
         audio_url = message.get("audio_url")
@@ -1161,6 +1193,7 @@ def record_audio_auto():
     return wav_buffer
 
 
+@retry_on_error
 def transcribe_audio(audio_data):
     """音声をテキストに変換（Gemini API）"""
     global gemini_client
@@ -1184,6 +1217,7 @@ def transcribe_audio(audio_data):
         return None
 
 
+@retry_on_error
 def get_ai_response(text):
     """AIからの応答を取得（ツール呼び出し対応）"""
     global gemini_client, conversation_history
@@ -1302,44 +1336,75 @@ def get_ai_response(text):
 
 
 def text_to_speech(text):
-    """テキストを音声に変換（Gemini TTS API）"""
-    global gemini_client
-
+    """テキストを音声に変換（Google Cloud TTS REST API）"""
+    import requests
+    import base64
+    
+    api_key = os.getenv('GOOGLE_TTS_API_KEY')
     print(f"音声合成中... (テキスト: {text[:30]}...)")
 
     try:
-        response = gemini_client.models.generate_content(
-            model=CONFIG["gemini_tts_model"],
-            contents=text,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=CONFIG["tts_voice"]
-                        )
-                    )
-                )
-            )
-        )
-
-        # 音声データを取得
-        audio_data = response.candidates[0].content.parts[0].inline_data.data
-
-        # PCMデータをWAV形式に変換（24kHz, 16bit, mono）
-        wav_buffer = io.BytesIO()
-        with wave.open(wav_buffer, 'wb') as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16bit
-            wf.setframerate(CONFIG["output_sample_rate"])
-            wf.writeframes(audio_data)
-
-        wav_buffer.seek(0)
-        return wav_buffer.read()
+        url = f'https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}'
+        
+        payload = {
+            'input': {'text': text},
+            'voice': {
+                'languageCode': 'ja-JP',
+                'name': 'ja-JP-Neural2-B',
+                'ssmlGender': 'FEMALE'
+            },
+            'audioConfig': {
+                'audioEncoding': 'LINEAR16',
+                'sampleRateHertz': 24000
+            }
+        }
+        
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        
+        audio_content = base64.b64decode(response.json()['audioContent'])
+        return audio_content
 
     except Exception as e:
         print(f"音声合成エラー: {e}")
         return None
+
+
+def generate_notification_sound():
+    """通知音を生成（スマホと同じピンポン音）"""
+    import numpy as np
+    
+    sample_rate = 24000
+    
+    # 1音目: 880Hz, 0.5秒
+    duration1 = 0.5
+    t1 = np.linspace(0, duration1, int(sample_rate * duration1), False)
+    envelope1 = np.exp(-t1 * 6)
+    tone1 = envelope1 * np.sin(2 * np.pi * 880 * t1) * 0.3
+    
+    # 間隔: 150ms
+    gap = np.zeros(int(sample_rate * 0.15))
+    
+    # 2音目: 1320Hz, 0.3秒
+    duration2 = 0.3
+    t2 = np.linspace(0, duration2, int(sample_rate * duration2), False)
+    envelope2 = np.exp(-t2 * 8)
+    tone2 = envelope2 * np.sin(2 * np.pi * 1320 * t2) * 0.2
+    
+    # 結合
+    audio = np.concatenate([tone1, gap, tone2])
+    audio_data = (audio * 32767).astype(np.int16).tobytes()
+    
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(audio_data)
+    
+    wav_buffer.seek(0)
+    return wav_buffer.read()
+
 
 
 def play_audio(audio_data):
