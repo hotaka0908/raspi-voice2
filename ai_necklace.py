@@ -1381,7 +1381,10 @@ def get_ai_response(text):
                     )
 
                     final_response = summary_response.text
-                    conversation_history.append({"role": "assistant", "content": final_response})
+                    # Function Callingを使った会話は履歴に含めない（エラー防止）
+                    # 追加したユーザー入力を削除
+                    if conversation_history and conversation_history[-1]["role"] == "user":
+                        conversation_history.pop()
                     return final_response
 
         # 通常のテキスト応答
@@ -1498,20 +1501,41 @@ def play_audio(audio_data):
 
     wav_buffer = io.BytesIO(audio_data)
     with wave.open(wav_buffer, 'rb') as wf:
+        original_rate = wf.getframerate()
+        channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        target_rate = 48000
+
+        # 全フレームを読み込み
+        frames = wf.readframes(wf.getnframes())
+
+        # 48000Hz以外の場合はリサンプリング
+        if original_rate != target_rate:
+            import numpy as np
+            # バイトデータをnumpy配列に変換
+            audio_array = np.frombuffer(frames, dtype=np.int16)
+
+            # リサンプリング（線形補間）
+            original_length = len(audio_array)
+            target_length = int(original_length * target_rate / original_rate)
+            indices = np.linspace(0, original_length - 1, target_length)
+            resampled = np.interp(indices, np.arange(original_length), audio_array)
+            frames = resampled.astype(np.int16).tobytes()
+            print(f"リサンプリング: {original_rate}Hz → {target_rate}Hz")
+
         stream = audio.open(
-            format=audio.get_format_from_width(wf.getsampwidth()),
-            channels=wf.getnchannels(),
-            rate=wf.getframerate(),
+            format=audio.get_format_from_width(sampwidth),
+            channels=channels,
+            rate=target_rate,
             output=True,
             output_device_index=output_device
         )
 
-        chunk_size = 1024
-        data = wf.readframes(chunk_size)
-
-        while data and running:
-            stream.write(data)
-            data = wf.readframes(chunk_size)
+        chunk_size = 1024 * sampwidth * channels
+        for i in range(0, len(frames), chunk_size):
+            if not running:
+                break
+            stream.write(frames[i:i+chunk_size])
 
         stream.stop_stream()
         stream.close()
