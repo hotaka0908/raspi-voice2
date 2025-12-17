@@ -1110,7 +1110,7 @@ def execute_tool(tool_call):
 
 def find_audio_device(p, device_type="input"):
     """オーディオデバイスを自動検出"""
-    target_names = ["USB PnP Sound", "USB Audio", "USB PnP Audio"]
+    target_names = ["USB PnP Sound", "USB Audio", "USB PnP Audio", "UACDemoV1.0"]
 
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
