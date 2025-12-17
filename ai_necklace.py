@@ -1563,7 +1563,10 @@ def process_voice():
 
 def record_and_send_voice_message():
     """音声を録音してスマホに送信"""
-    global button, firebase_messenger
+    global button, firebase_messenger, conversation_history
+
+    # 音声メッセージ送信後は会話をリセット（次のリクエストに影響しないように）
+    conversation_history = []
 
     announce = text_to_speech("了解です。押しながら話してください。")
     if announce:
